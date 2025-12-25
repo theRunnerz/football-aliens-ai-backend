@@ -48,7 +48,7 @@ export default async function handler(req, res) {
 
     // Call Gemini 3 API
     const apiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1/models/gemini-3:generateContent",
+      "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent",
       {
         method: "POST",
         headers: {
