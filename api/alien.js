@@ -4,12 +4,13 @@
  * ✅ Proper CORS
  * ✅ Gemini 1.5 Pro (correct API usage)
  * ✅ Alien personalities
+ * ✅ Improved parsing to avoid "Alien brain static"
  */
 
 export default async function handler(req, res) {
-  /* ======================
-     CORS HEADERS (FIRST)
-  ====================== */
+  // ======================
+  // CORS HEADERS (FIRST)
+  // ======================
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader(
@@ -18,7 +19,7 @@ export default async function handler(req, res) {
   );
   res.setHeader("Access-Control-Max-Age", "86400");
 
-  // Handle preflight
+  // Preflight
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
@@ -42,9 +43,9 @@ export default async function handler(req, res) {
         .json({ reply: "👽 Missing signal from human." });
     }
 
-    /* ======================
-       Alien personalities
-    ====================== */
+    // ======================
+    // Alien personalities
+    // ======================
     const PERSONALITIES = {
       Zorg:
         "You are Zorg, a dominant alien war strategist. Speak with authority, confidence, and intimidation.",
@@ -64,33 +65,39 @@ export default async function handler(req, res) {
 Human says: "${message}"
 Respond as the alien.`;
 
-    /* ======================
-       Gemini API Call
-       ⚠️ API KEY IN URL
-    ====================== */
+    // ======================
+    // Gemini API Call
+    // ======================
     const apiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
-            {
-              role: "user",
-              parts: [{ text: prompt }]
-            }
-          ]
+            { role: "user", parts: [{ text: prompt }] }
+          ],
+          temperature: 0.7,
+          top_p: 0.95,
+          max_output_tokens: 150
         })
       }
     );
 
     const data = await apiRes.json();
+    console.log("👽 Gemini API response:", JSON.stringify(data, null, 2));
 
+    // ======================
+    // Extract reply safely
+    // ======================
     const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "👽 Alien brain static.";
+      data?.candidates
+        ?.map(c =>
+          c.content
+            ?.map(p => p.parts?.map(pp => pp.text).join("") || "")
+            .join("") || ""
+        )
+        .join("") || "👽 Alien brain static.";
 
     return res.status(200).json({ reply });
   } catch (err) {
