@@ -1,18 +1,22 @@
 export default async function handler(req, res) {
-  /* ======================
-     CORS HEADERS
-  ====================== */
+  // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   // Handle preflight
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return res.status(200).end(); // ✅ OPTIONS must always succeed
   }
 
+  // Now handle POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // Authorization check (only for POST)
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
@@ -43,9 +47,7 @@ Human says:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
-            {
-              parts: [{ text: prompt }]
-            }
+            { parts: [{ text: prompt }] }
           ]
         })
       }
@@ -58,6 +60,7 @@ Human says:
       "👽 Alien brain static.";
 
     res.status(200).json({ reply });
+
   } catch (err) {
     console.error("ALIEN CORE ERROR:", err);
     res.status(200).json({ reply: "👽 Alien signal lost." });
