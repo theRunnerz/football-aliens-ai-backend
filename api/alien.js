@@ -1,14 +1,15 @@
 /**
  * /api/alien.js
  * Football Aliens AI – Vercel Serverless Function
- * ✅ Correct CORS
- * ✅ Correct Gemini 1.5 API call
+ * ✅ Proper CORS
+ * ✅ Gemini 1.5 Pro (correct API usage)
+ * ✅ Alien personalities
  */
 
 export default async function handler(req, res) {
-  // ======================
-  // ✅ CORS HEADERS (ALWAYS FIRST)
-  // ======================
+  /* ======================
+     CORS HEADERS (FIRST)
+  ====================== */
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader(
@@ -17,56 +18,56 @@ export default async function handler(req, res) {
   );
   res.setHeader("Access-Control-Max-Age", "86400");
 
-  // ======================
-  // ✅ Handle preflight
-  // ======================
+  // Handle preflight
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
-  // ======================
-  // ❌ Block non-POST
-  // ======================
+  // Only POST allowed
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // ======================
-  // 🔐 API key check
-  // ======================
+  // Ensure API key exists
   if (!process.env.GEMINI_API_KEY) {
     return res.status(500).json({ error: "Gemini API key missing" });
   }
 
   try {
-    const { message, alien } = req.body || {};
+    const { message, alien } = req.body;
 
     if (!message || !alien) {
-      return res.status(400).json({
-        reply: "👽 Missing signal from human."
-      });
+      return res
+        .status(400)
+        .json({ reply: "👽 Missing signal from human." });
     }
 
-    // ======================
-    // 👽 Alien personalities
-    // ======================
+    /* ======================
+       Alien personalities
+    ====================== */
     const PERSONALITIES = {
-      Zorg: "You are Zorg, a dominant alien war strategist. Speak with authority.",
-      Xarn: "You are Xarn, a wise alien scientist. Speak calmly and analytically.",
-      Blip: "You are Blip, a playful chaotic alien. Be funny and unpredictable."
+      Zorg:
+        "You are Zorg, a dominant alien war strategist. Speak with authority, confidence, and intimidation.",
+      Xarn:
+        "You are Xarn, a wise alien scientist. Speak calmly, analytically, and with deep intelligence.",
+      Blip:
+        "You are Blip, a playful chaotic alien. Be funny, unpredictable, and slightly mischievous."
     };
 
     if (!PERSONALITIES[alien]) {
-      return res.status(400).json({
-        reply: "👽 Unknown alien selected."
-      });
+      return res
+        .status(400)
+        .json({ reply: "👽 Unknown alien selected." });
     }
 
-    const prompt = `${PERSONALITIES[alien]}\nHuman says: "${message}"`;
+    const prompt = `${PERSONALITIES[alien]}
+Human says: "${message}"
+Respond as the alien.`;
 
-    // ======================
-    // 🤖 Gemini 1.5 API (CORRECT FORMAT)
-    // ======================
+    /* ======================
+       Gemini API Call
+       ⚠️ API KEY IN URL
+    ====================== */
     const apiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
@@ -94,8 +95,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ reply });
   } catch (err) {
     console.error("👽 ALIEN CORE ERROR:", err);
-    return res.status(500).json({
-      reply: "👽 Alien signal lost."
-    });
+    return res.status(200).json({ reply: "👽 Alien signal lost." });
   }
 }
