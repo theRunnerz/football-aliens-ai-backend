@@ -1,44 +1,40 @@
 export default async function handler(req, res) {
-  // ✅ CORS HEADERS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  // ✅ Preflight request
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
   if (req.method !== "POST") {
-    return res.status(405).json({ reply: "Method not allowed" });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
     const { message, alien } = req.body;
 
     if (!message || !alien) {
-      return res.status(400).json({ reply: "Missing message or alien" });
+      return res.status(400).json({ reply: "👽 Missing signal data." });
     }
 
-    const personalities = {
-      Zorg: "a grumpy football-obsessed alien commander. Short, tactical, sarcastic.",
-      Blip: "an energetic, meme-loving alien who jokes constantly.",
-      Xarn: "a calm, ancient alien strategist who speaks cryptically."
+    const PERSONALITIES = {
+      Zorg: "You are Zorg, a dominant alien war strategist. Speak with authority.",
+      Xarn: "You are Xarn, a wise alien scientist. Speak calmly and analytically.",
+      Blip: "You are Blip, a playful chaotic alien. Be funny and unpredictable."
     };
 
     const prompt = `
-You are ${alien}, ${personalities[alien]}.
-User says: "${message}"
-Reply in character.
+${PERSONALITIES[alien]}
+
+Human says:
+"${message}"
 `;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=" +
+        process.env.GEMINI_API_KEY,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ]
         })
       }
     );
@@ -47,14 +43,11 @@ Reply in character.
 
     const reply =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "👽 Alien signal lost.";
+      "👽 Alien brain static.";
 
-    return res.status(200).json({ reply });
-
+    res.status(200).json({ reply });
   } catch (err) {
-    console.error("Backend error:", err);
-    return res
-      .status(500)
-      .json({ reply: `👽 AI core malfunction: ${err.message}` });
+    console.error("ALIEN CORE ERROR:", err);
+    res.status(200).json({ reply: "👽 Alien signal lost." });
   }
 }
