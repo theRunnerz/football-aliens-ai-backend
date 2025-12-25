@@ -1,45 +1,32 @@
-/**
- * /api/alien.js
- * Vercel serverless function for Football Aliens AI
- * Includes proper CORS headers + Gemini fallback + 3 personalities
- */
-
 export default async function handler(req, res) {
-  // ======================
-  // ✅ CORS HEADERS (must be first!)
-  // ======================
-  res.setHeader("Access-Control-Allow-Origin", "*"); // Allow any origin
+  /* ======================
+     CORS — MUST BE FIRST
+  ====================== */
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Preflight request handling
+  // Handle preflight
   if (req.method === "OPTIONS") {
-    return res.status(204).end(); // 204 No Content for OPTIONS
+    return res.status(204).end();
   }
 
-  // Only allow POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Ensure API key exists
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(401).json({ error: "Unauthorized — API key missing" });
-  }
-
   try {
-    const { message, alien } = req.body;
+    const { message, alien } = req.body || {};
 
     if (!message || !alien) {
-      return res.status(400).json({ reply: "👽 Missing signal from human." });
+      return res.status(400).json({
+        reply: "👽 Missing signal from human."
+      });
     }
 
-    // ======================
-    // Alien personalities
-    // ======================
+    /* ======================
+       Alien personalities
+    ====================== */
     const PERSONALITIES = {
       Zorg: "You are Zorg, a dominant alien war strategist. Speak with authority.",
       Xarn: "You are Xarn, a wise alien scientist. Speak calmly and analytically.",
@@ -47,38 +34,48 @@ export default async function handler(req, res) {
     };
 
     if (!PERSONALITIES[alien]) {
-      return res.status(400).json({ reply: "👽 Unknown alien selected." });
+      return res.status(400).json({
+        reply: "👽 Unknown alien selected."
+      });
     }
 
-    const prompt = `${PERSONALITIES[alien]}\nHuman says: "${message}"`;
-
-    // ======================
-    // Call Gemini API
-    // ======================
-    const apiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent",
+    /* ======================
+       Gemini 1.5 API (CORRECT)
+    ====================== */
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          prompt: prompt,
-          maxOutputTokens: 150
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `${PERSONALITIES[alien]}\nHuman says: "${message}"`
+                }
+              ]
+            }
+          ]
         })
       }
     );
 
-    const data = await apiRes.json();
+    const geminiData = await geminiRes.json();
 
     const reply =
-      data?.candidates?.[0]?.content?.[0]?.text ||
+      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "👽 Alien brain static.";
 
-    res.status(200).json({ reply });
+    return res.status(200).json({ reply });
+
   } catch (err) {
     console.error("👽 ALIEN CORE ERROR:", err);
-    res.status(200).json({ reply: "👽 Alien signal lost." });
+    return res.status(200).json({
+      reply: "👽 Alien signal lost."
+    });
   }
 }
