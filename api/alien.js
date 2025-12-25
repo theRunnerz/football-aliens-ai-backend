@@ -1,80 +1,93 @@
-/**
- * Football Aliens AI Backend
- * Fully CORS-safe for GitHub Pages front end
- * Supports Gemini 3 and 3 alien personalities
- */
+import express from "express";
+import fetch from "node-fetch";
 
-export default async function handler(req, res) {
-  // ✅ Always send CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "*"); // allow any origin
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+const app = express();
+
+/* =========================
+   MIDDLEWARE
+========================= */
+
+app.use(express.json());
+
+// ✅ CORS FIX (GitHub Pages → Vercel)
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  // ✅ Handle preflight OPTIONS requests
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  // Only POST requests allowed
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  next();
+});
 
-  // Check Gemini API key
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(401).json({ error: "Unauthorized — API key missing" });
-  }
+/* =========================
+   HEALTH CHECK
+========================= */
 
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    alien: "online 👽",
+    time: new Date().toISOString()
+  });
+});
+
+/* =========================
+   ALIEN AI ENDPOINT
+========================= */
+
+app.post("/api/alien", async (req, res) => {
   try {
-    const { message, alien } = req.body;
+    const prompt = req.body.prompt;
 
-    if (!message || !alien) {
-      return res.status(400).json({ reply: "👽 Missing signal from human." });
+    if (!prompt) {
+      return res.status(400).json({
+        reply: "👽 No signal received from human"
+      });
     }
 
-    // Define alien personalities
-    const PERSONALITIES = {
-      Zorg: "You are Zorg, a dominant alien war strategist. Speak with authority.",
-      Xarn: "You are Xarn, a wise alien scientist. Speak calmly and analytically.",
-      Blip: "You are Blip, a playful chaotic alien. Be funny and unpredictable."
-    };
-
-    if (!PERSONALITIES[alien]) {
-      return res.status(400).json({ reply: "👽 Unknown alien selected." });
-    }
-
-    // Build Gemini prompt
-    const prompt = `${PERSONALITIES[alien]}\nHuman says: "${message}"`;
-
-    // Call Gemini 3 API
-    const apiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent",
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          prompt,
-          maxOutputTokens: 150
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: prompt }]
+            }
+          ]
         })
       }
     );
 
-    const data = await apiRes.json();
+    if (!geminiResponse.ok) {
+      throw new Error("Gemini API error");
+    }
 
-    // Parse response safely
+    const data = await geminiResponse.json();
+
     const reply =
-      data?.candidates?.[0]?.content?.[0]?.text || "👽 Alien brain static.";
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "👽 Alien signal lost… try again";
 
-    // ✅ Return reply with CORS headers still intact
-    return res.status(200).json({ reply });
-  } catch (err) {
-    console.error("👽 ALIEN CORE ERROR:", err);
+    res.json({ reply });
 
-    // Always respond with headers to prevent CORS blocking
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    return res.status(200).json({ reply: "👽 Alien signal lost." });
+  } catch (error) {
+    console.error("ALIEN AI ERROR:", error);
+    res.status(500).json({
+      reply: "👽 Alien signal lost… AI transmission failed"
+    });
   }
-}
+});
+
+/* =========================
+   EXPORT FOR VERCEL
+========================= */
+
+export default app;
