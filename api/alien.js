@@ -1,22 +1,22 @@
-/**
- * /api/alien.js
- * Football Aliens AI backend
- * Gemini 3 integration + 3 personalities + CORS for GitHub Pages
- */
-
+// /api/alien.js
 export default async function handler(req, res) {
-  // ✅ Allow requests from GitHub Pages
-  const allowedOrigin = "https://therunnerz.github.io";
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  // ✅ Allow all origins (or replace with your GitHub Pages URL)
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  // Preflight
-  if (req.method === "OPTIONS") return res.status(200).end();
+  // ✅ Respond to preflight OPTIONS requests immediately
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-  if (!process.env.GEMINI_API_KEY) return res.status(401).json({ error: "Unauthorized — API key missing" });
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(401).json({ error: "Unauthorized — API key missing" });
+  }
 
   try {
     const { message, alien } = req.body;
@@ -41,20 +41,16 @@ export default async function handler(req, res) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`
         },
-        body: JSON.stringify({
-          prompt: prompt,
-          maxOutputTokens: 150
-        })
+        body: JSON.stringify({ prompt, maxOutputTokens: 150 })
       }
     );
 
     const data = await apiRes.json();
-
     const reply = data?.candidates?.[0]?.content?.[0]?.text || "👽 Alien brain static.";
-
     res.status(200).json({ reply });
   } catch (err) {
     console.error("👽 ALIEN CORE ERROR:", err);
     res.status(200).json({ reply: "👽 Alien signal lost." });
   }
 }
+
