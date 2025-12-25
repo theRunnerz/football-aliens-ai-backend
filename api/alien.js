@@ -1,20 +1,20 @@
 export default async function handler(req, res) {
-  // CORS headers
+  // Set CORS headers for all requests
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  // Handle preflight
+  // Preflight request
   if (req.method === "OPTIONS") {
-    return res.status(200).end(); // ✅ OPTIONS must always succeed
+    return res.status(200).end();
   }
 
-  // Now handle POST
+  // Only allow POST after preflight
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Authorization check (only for POST)
+  // Check Gemini key
   if (!process.env.GEMINI_API_KEY) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -66,3 +66,4 @@ Human says:
     res.status(200).json({ reply: "👽 Alien signal lost." });
   }
 }
+
