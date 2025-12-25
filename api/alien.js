@@ -1,11 +1,16 @@
-// /api/alien.js
+/**
+ * /api/alien.js
+ * Vercel serverless function for Football Aliens AI
+ * Gemini 3 integration, personalities, CORS enabled
+ */
+
 export default async function handler(req, res) {
-  // ✅ Allow all origins (or replace with your GitHub Pages URL)
+  // ✅ CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  // ✅ Respond to preflight OPTIONS requests immediately
+  // ✅ Preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -20,8 +25,9 @@ export default async function handler(req, res) {
 
   try {
     const { message, alien } = req.body;
-
-    if (!message || !alien) return res.status(400).json({ reply: "👽 Missing signal from human." });
+    if (!message || !alien) {
+      return res.status(400).json({ reply: "👽 Missing human message or alien selection." });
+    }
 
     const PERSONALITIES = {
       Zorg: "You are Zorg, a dominant alien war strategist. Speak with authority.",
@@ -29,28 +35,34 @@ export default async function handler(req, res) {
       Blip: "You are Blip, a playful chaotic alien. Be funny and unpredictable."
     };
 
-    if (!PERSONALITIES[alien]) return res.status(400).json({ reply: "👽 Unknown alien selected." });
+    if (!PERSONALITIES[alien]) {
+      return res.status(400).json({ reply: "👽 Unknown alien selected." });
+    }
 
-    const prompt = `${PERSONALITIES[alien]}\nHuman says: "${message}"`;
+    const promptText = `${PERSONALITIES[alien]}\nHuman says: "${message}"`;
 
     const apiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1/models/gemini-3:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta2/models/gemini-3:generateText",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${process.env.GEMINI_API_KEY}`
         },
-        body: JSON.stringify({ prompt, maxOutputTokens: 150 })
+        body: JSON.stringify({
+          prompt: { text: promptText },
+          temperature: 0.7,
+          maxOutputTokens: 150
+        })
       }
     );
 
     const data = await apiRes.json();
-    const reply = data?.candidates?.[0]?.content?.[0]?.text || "👽 Alien brain static.";
+    const reply = data?.candidates?.[0]?.output?.[0]?.content?.[0]?.text || "👽 Alien brain static.";
+
     res.status(200).json({ reply });
   } catch (err) {
     console.error("👽 ALIEN CORE ERROR:", err);
     res.status(200).json({ reply: "👽 Alien signal lost." });
   }
 }
-
