@@ -3,21 +3,18 @@
  * Football Aliens AI – Vercel Serverless Function
  *
  * ✅ Proper CORS
- * ✅ Gemini 1.5 Flash (stable + public)
- * ✅ Bulletproof response parsing
- * ✅ Alien personalities
+ * ✅ Gemini 1.5 Flash
+ * ✅ Safety-aware parsing
+ * ✅ Personality fallback replies
  */
 
 export default async function handler(req, res) {
   // ======================
-  // CORS (FIRST)
+  // CORS
   // ======================
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Max-Age", "86400");
 
   if (req.method === "OPTIONS") {
@@ -41,20 +38,31 @@ export default async function handler(req, res) {
 
     const PERSONALITIES = {
       Zorg:
-        "You are Zorg, a dominant alien war strategist. Speak with authority and menace.",
+        "You are Zorg, a dominant alien war strategist. Respond confidently, clearly, and without threats.",
       Xarn:
-        "You are Xarn, a wise alien scientist. Speak calmly, logically, and intelligently.",
+        "You are Xarn, a wise alien scientist. Respond thoughtfully, friendly, and informative.",
       Blip:
-        "You are Blip, a playful chaotic alien. Be funny, weird, and unpredictable."
+        "You are Blip, a playful alien. Be funny, weird, and lighthearted."
+    };
+
+    const FALLBACKS = {
+      Zorg: "Zorg acknowledges your presence.",
+      Xarn: "Greetings, human. I am Xarn.",
+      Blip: "Blip says hi! 👽✨"
     };
 
     if (!PERSONALITIES[alien]) {
       return res.status(400).json({ reply: "👽 Unknown alien selected." });
     }
 
-    const prompt = `${PERSONALITIES[alien]}
-Human says: "${message}"
-Respond ONLY as the alien.`;
+    // 🔑 Gemini-friendly prompt (less likely to trigger safety)
+    const prompt = `
+${PERSONALITIES[alien]}
+Reply naturally in character.
+
+Human message:
+${message}
+`;
 
     const apiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -74,19 +82,28 @@ Respond ONLY as the alien.`;
 
     const data = await apiRes.json();
 
-    // 🔍 DEBUG LOG (shows up in Vercel logs)
-    console.log("GEMINI RAW RESPONSE:", JSON.stringify(data));
+    console.log("🧠 GEMINI RAW:", JSON.stringify(data));
 
-    let reply = "👽 Alien brain static.";
+    let reply = FALLBACKS[alien];
 
+    // ✅ Success path
     if (
-      data &&
-      Array.isArray(data.candidates) &&
-      data.candidates[0]?.content?.parts
+      data?.candidates?.length &&
+      data.candidates[0]?.content?.parts?.length
     ) {
-      reply = data.candidates[0].content.parts
+      const text = data.candidates[0].content.parts
         .map(p => p.text)
-        .join(" ");
+        .join(" ")
+        .trim();
+
+      if (text) {
+        reply = text;
+      }
+    }
+
+    // 🚨 Safety blocked
+    if (data?.promptFeedback?.blockReason) {
+      console.warn("⚠️ Gemini blocked response:", data.promptFeedback);
     }
 
     return res.status(200).json({ reply });
