@@ -4,17 +4,21 @@
  *
  * ✅ Proper CORS
  * ✅ Gemini 1.5 Flash
- * ✅ Safety-aware parsing
- * ✅ Personality fallback replies
+ * ✅ Bulletproof response parsing (always returns something)
+ * ✅ Alien personalities
+ * ✅ Enhanced prompts for tricky instructions
  */
 
 export default async function handler(req, res) {
   // ======================
-  // CORS
+  // CORS (FIRST)
   // ======================
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
   res.setHeader("Access-Control-Max-Age", "86400");
 
   if (req.method === "OPTIONS") {
@@ -38,31 +42,25 @@ export default async function handler(req, res) {
 
     const PERSONALITIES = {
       Zorg:
-        "You are Zorg, a dominant alien war strategist. Respond confidently, clearly, and without threats.",
+        "You are Zorg, a dominant alien war strategist. Speak with authority and menace.",
       Xarn:
-        "You are Xarn, a wise alien scientist. Respond thoughtfully, friendly, and informative.",
+        "You are Xarn, a wise alien scientist. Speak calmly, logically, and intelligently.",
       Blip:
-        "You are Blip, a playful alien. Be funny, weird, and lighthearted."
-    };
-
-    const FALLBACKS = {
-      Zorg: "Zorg acknowledges your presence.",
-      Xarn: "Greetings, human. I am Xarn.",
-      Blip: "Blip says hi! 👽✨"
+        "You are Blip, a playful chaotic alien. Be funny, weird, and unpredictable."
     };
 
     if (!PERSONALITIES[alien]) {
       return res.status(400).json({ reply: "👽 Unknown alien selected." });
     }
 
-    // 🔑 Gemini-friendly prompt (less likely to trigger safety)
-    const prompt = `
-${PERSONALITIES[alien]}
-Reply naturally in character.
-
-Human message:
-${message}
-`;
+    // ======================
+    // STRONGER PROMPT (Boost for tricky instructions)
+    // ======================
+    const prompt = `${PERSONALITIES[alien]}
+Human says: "${message}"
+You MUST respond in the style of your personality.
+If you cannot follow the instruction exactly, respond creatively in your own style.
+Respond ONLY as the alien, using complete sentences if possible.`;
 
     const apiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -82,28 +80,31 @@ ${message}
 
     const data = await apiRes.json();
 
-    console.log("🧠 GEMINI RAW:", JSON.stringify(data));
+    // ======================
+    // DEBUG LOG
+    // ======================
+    console.log("GEMINI RAW RESPONSE:", JSON.stringify(data));
 
-    let reply = FALLBACKS[alien];
+    // ======================
+    // BULLETPROOF PARSING
+    // ======================
+    let reply = "👽 Alien brain static.";
 
-    // ✅ Success path
-    if (
-      data?.candidates?.length &&
-      data.candidates[0]?.content?.parts?.length
-    ) {
-      const text = data.candidates[0].content.parts
-        .map(p => p.text)
-        .join(" ")
-        .trim();
-
-      if (text) {
-        reply = text;
+    if (data?.candidates?.length) {
+      // Prefer parts if present
+      const parts = data.candidates[0]?.content?.parts;
+      if (Array.isArray(parts) && parts.length) {
+        reply = parts.map(p => p.text).join(" ").trim();
+      } 
+      // Fallback to content.text if parts is empty
+      else if (data.candidates[0]?.content?.text) {
+        reply = data.candidates[0].content.text.trim();
       }
     }
 
-    // 🚨 Safety blocked
-    if (data?.promptFeedback?.blockReason) {
-      console.warn("⚠️ Gemini blocked response:", data.promptFeedback);
+    // Extra fallback to ensure something is returned
+    if (!reply || reply === "") {
+      reply = "👽 The alien hums mysteriously...";
     }
 
     return res.status(200).json({ reply });
