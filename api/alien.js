@@ -1,41 +1,46 @@
-// /api/alien.js
-export default async function handler(req, res) {
-  // === Handle CORS preflight ===
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+// File: /api/alien.js
+import { GoogleGenAI } from "@google/genai";
 
+export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
+    // CORS preflight
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     return res.status(204).end();
   }
 
-  // === Only allow POST ===
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ reply: "Method not allowed" });
+  }
+
+  const { message, alien } = req.body;
+
+  // Validate inputs
+  if (!message || !alien) {
+    return res.json({ reply: "👽 Missing message or alien" });
+  }
+
+  const validAliens = ["Zorg", "Xarn", "Blip"];
+  if (!validAliens.includes(alien)) {
+    return res.json({ reply: "👽 Unknown alien selected." });
   }
 
   try {
-    const { message, alien } = req.body || {};
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    if (!message || !alien) {
-      return res.status(400).json({ reply: "👽 Missing alien or message" });
-    }
+    const prompt = `You are ${alien}, a quirky alien. Reply to the human message: "${message}"`;
 
-    // === Example responses for aliens ===
-    const alienResponses = {
-      Blip: () => `Blip says: “That’s weird indeed!” 👽`,
-      Xarn: () => `Xarn reports: “${message.split(" ").slice(0, 5).join(" ")}…” 🌌`,
-      Zorg: () => `Zorg responds: “Intriguing, human.” 👾`,
-    };
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    });
 
-    const replyFn = alienResponses[alien] || (() => "👽 Unknown alien selected.");
-
-    const reply = replyFn();
-
-    return res.status(200).json({ reply });
+    // Send AI-generated response
+    return res.json({ reply: response.text });
   } catch (err) {
-    console.error("❌ Server error:", err);
-    return res.status(500).json({ reply: "👽 Alien core malfunction" });
+    console.error("AI error:", err);
+    return res.status(500).json({ reply: "👽 AI core malfunction" });
   }
 }
 
