@@ -4,9 +4,8 @@
  *
  * ✅ Proper CORS
  * ✅ Gemini 1.5 Flash
- * ✅ Bulletproof response parsing (always returns something)
+ * ✅ Full debug logging
  * ✅ Alien personalities
- * ✅ Enhanced prompts for tricky instructions
  */
 
 export default async function handler(req, res) {
@@ -21,24 +20,16 @@ export default async function handler(req, res) {
   );
   res.setHeader("Access-Control-Max-Age", "86400");
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-
-  if (req.method !== "POST") {
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  if (!process.env.GEMINI_API_KEY) {
+  if (!process.env.GEMINI_API_KEY)
     return res.status(500).json({ error: "Gemini API key missing" });
-  }
 
   try {
     const { message, alien } = req.body;
-
-    if (!message || !alien) {
+    if (!message || !alien)
       return res.status(400).json({ reply: "👽 Missing signal from human." });
-    }
 
     const PERSONALITIES = {
       Zorg:
@@ -49,18 +40,15 @@ export default async function handler(req, res) {
         "You are Blip, a playful chaotic alien. Be funny, weird, and unpredictable."
     };
 
-    if (!PERSONALITIES[alien]) {
+    if (!PERSONALITIES[alien])
       return res.status(400).json({ reply: "👽 Unknown alien selected." });
-    }
 
     // ======================
-    // STRONGER PROMPT (Boost for tricky instructions)
+    // Simplified debug prompt
     // ======================
     const prompt = `${PERSONALITIES[alien]}
 Human says: "${message}"
-You MUST respond in the style of your personality.
-If you cannot follow the instruction exactly, respond creatively in your own style.
-Respond ONLY as the alien, using complete sentences if possible.`;
+Respond ONLY as the alien.`;
 
     const apiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -68,12 +56,7 @@ Respond ONLY as the alien, using complete sentences if possible.`;
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: prompt }]
-            }
-          ]
+          contents: [{ role: "user", parts: [{ text: prompt }] }]
         })
       }
     );
@@ -81,35 +64,25 @@ Respond ONLY as the alien, using complete sentences if possible.`;
     const data = await apiRes.json();
 
     // ======================
-    // DEBUG LOG
+    // FULL DEBUG LOG
     // ======================
     console.log("GEMINI RAW RESPONSE:", JSON.stringify(data));
 
     // ======================
-    // BULLETPROOF PARSING
+    // Robust parsing
     // ======================
     let reply = "👽 Alien brain static.";
-
     if (data?.candidates?.length) {
-      // Prefer parts if present
       const parts = data.candidates[0]?.content?.parts;
-      if (Array.isArray(parts) && parts.length) {
-        reply = parts.map(p => p.text).join(" ").trim();
-      } 
-      // Fallback to content.text if parts is empty
-      else if (data.candidates[0]?.content?.text) {
-        reply = data.candidates[0].content.text.trim();
-      }
+      if (Array.isArray(parts)) reply = parts.map(p => p.text).join(" ");
     }
 
-    // Extra fallback to ensure something is returned
-    if (!reply || reply === "") {
-      reply = "👽 The alien hums mysteriously...";
-    }
-
-    return res.status(200).json({ reply });
+    // ======================
+    // Return both reply and raw response
+    // ======================
+    return res.status(200).json({ reply, raw: data });
   } catch (err) {
     console.error("👽 ALIEN CORE ERROR:", err);
-    return res.status(200).json({ reply: "👽 Alien signal lost." });
+    return res.status(200).json({ reply: "👽 Alien signal lost.", error: err });
   }
 }
