@@ -1,28 +1,10 @@
-/**
- * /api/alien.js
- * Football Aliens AI – Vercel Serverless Function (Gemini 3 Pro Preview)
- *
- * ✅ Proper CORS (POST + OPTIONS)
- * ✅ Uses @google/genai SDK
- * ✅ Bulletproof response parsing
- * ✅ Alien personalities
- */
-
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
-
-const PERSONALITIES = {
-  Zorg: "You are Zorg, a dominant alien war strategist. Speak with authority and menace.",
-  Xarn: "You are Xarn, a wise alien scientist. Speak calmly, logically, and intelligently.",
-  Blip: "You are Blip, a playful chaotic alien. Be funny, weird, and unpredictable.",
-};
+const ai = new GoogleGenAI({});
 
 export default async function handler(req, res) {
   // ======================
-  // CORS (FIRST)
+  // CORS
   // ======================
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -40,16 +22,21 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ error: "Gemini API key missing" });
-  }
-
   try {
     const { message, alien } = req.body;
 
     if (!message || !alien) {
       return res.status(400).json({ reply: "👽 Missing signal from human." });
     }
+
+    const PERSONALITIES = {
+      Zorg:
+        "You are Zorg, a dominant alien war strategist. Speak with authority and menace.",
+      Xarn:
+        "You are Xarn, a wise alien scientist. Speak calmly, logically, and intelligently.",
+      Blip:
+        "You are Blip, a playful chaotic alien. Be funny, weird, and unpredictable."
+    };
 
     if (!PERSONALITIES[alien]) {
       return res.status(400).json({ reply: "👽 Unknown alien selected." });
@@ -59,28 +46,25 @@ export default async function handler(req, res) {
 Human says: "${message}"
 Respond ONLY as the alien.`;
 
+    // ======================
+    // Use GoogleGenAI client
+    // ======================
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
-        },
-      ],
+      contents: prompt,
+      temperature: 0.7,
+      candidate_count: 1,
     });
 
-    // 🔍 Robust response parsing
     let reply = "👽 Alien brain static.";
-    if (response?.candidates?.length) {
-      const parts = response.candidates[0].content.parts;
-      if (Array.isArray(parts)) {
-        reply = parts.map(p => p.text).join(" ");
-      }
+
+    if (response?.candidates?.[0]?.content) {
+      reply = response.candidates[0].content.map(c => c.text).join(" ");
     }
 
-    return res.status(200).json({ reply, raw: response });
+    return res.status(200).json({ reply });
   } catch (err) {
     console.error("👽 ALIEN CORE ERROR:", err);
-    return res.status(200).json({ reply: "👽 Alien signal lost." });
+    return res.status(500).json({ reply: "👽 Alien signal lost." });
   }
 }
