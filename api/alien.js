@@ -1,45 +1,44 @@
-// File: /api/alien.js
 import { GoogleGenAI } from "@google/genai";
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    return res.status(204).set({
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    }).end();
+  }
 
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ reply: "Method not allowed" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ reply: "Method not allowed" });
+  }
 
-  const { message, alien } = req.body;
+  const { message, alien } = req.body || {};
 
-  if (!message || !alien) return res.json({ reply: "👽 Missing message or alien" });
+  if (!message || !alien) {
+    return res.status(400).json({ reply: "👽 Missing message or alien" });
+  }
 
-  const validAliens = ["Zorg", "Xarn", "Blip"];
-  if (!validAliens.includes(alien)) return res.json({ reply: "👽 Unknown alien selected." });
-
-  // Ensure GEMINI_API_KEY is present
   if (!process.env.GEMINI_API_KEY) {
     console.error("❌ GEMINI_API_KEY missing");
-    return res.status(500).json({ reply: "👽 Server misconfigured: GEMINI_API_KEY missing" });
+    return res.status(500).json({ reply: "👽 AI core offline: API key missing" });
   }
 
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    const prompt = `You are ${alien}, a quirky alien. Reply to the human message: "${message}"`;
+    const prompt = `Alien ${alien} responds to: "${message}"`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 
-    if (!response || !response.text) {
-      console.warn("⚠️ AI returned empty response");
-      return res.json({ reply: "👽 Alien brain static…" });
-    }
+    const replyText = response?.text?.trim() || "👽 Alien brain static…";
 
-    return res.json({ reply: response.text });
+    return res.status(200).json({ reply: replyText });
   } catch (err) {
-    console.error("❌ AI error:", err);
+    console.error("❌ AI generation failed:", err);
     return res.status(500).json({ reply: "👽 AI core malfunction" });
   }
 }
